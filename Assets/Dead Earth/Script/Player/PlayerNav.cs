@@ -43,7 +43,9 @@ public class PlayerNav : MonoBehaviour
         //注意这里是以[局部坐标轴]作为参考。
         //三角函数,去求出anim动画运动【angle】需要的值
         Vector3 localDir = transform.InverseTransformDirection(_agent.desiredVelocity);         //转化为局部坐标,才能去计算角度。
+        //look at here!!!  sin,cos,tan 求的值都是角度.根据1°= 180/Π.得知:arcsin,arccos,arctan [unity这里简写成 Asin、Acos、Atan] 是反切、反弦. 结果是: 1弧度 = Π/180;
         float angle = Mathf.Atan2(localDir.x , localDir.z) * Mathf.Rad2Deg;                     //得到角度。
+        Debug.Log("期望度数：" + angle);
         _smoothAngle = Mathf.MoveTowardsAngle(_smoothAngle, angle, 80.0f * Time.deltaTime);     //水平线插值
         _anim.SetFloat(_angleHash, _smoothAngle);
         //anim动画运动【speed】需要的值
@@ -77,7 +79,8 @@ public class PlayerNav : MonoBehaviour
         //TODO 自定义【混合模式】 开关,在 左、右转向的时候,由anim控制了
         if (_isMixed && !_anim.GetCurrentAnimatorStateInfo(0).IsName("Base Layer.Locomotion"))
         {
-            transform.rotation = _anim.rootRotation; //必须更新过去,不然角色不会 左、右转向。
+            //由root根运动控制,anim的移动.           就可以实现:左、右挪步动画效果.
+            transform.rotation = _anim.rootRotation; //覆盖掉,update中的调用。 (相当于update中[rotation]没赋值过。)
         }
 
         _agent.velocity = _anim.deltaPosition / Time.deltaTime;    // (速度)agent = (位置增量)路程/(时间增量)时间

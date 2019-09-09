@@ -73,26 +73,29 @@ public abstract class AIStateMachine : MonoBehaviour
     //public
     public AITarget VisualThreat = new AITarget();
     public AITarget AudioThreat = new AITarget();
-    public AIStateType _currentStateType = AIStateType.Idle; 
+
 
     //protected
     protected Dictionary<AIStateType, AIState> _states = new Dictionary<AIStateType, AIState>();
     protected AITarget _target = new AITarget();
     protected AIState _currentState;
+    protected int _rootPositionRefCount = 0;
+    protected int _rootRotationRefCount = 0;
 
-
+    // Protected Inspector Assigned
+    [SerializeField] private AIStateType _currentStateType = AIStateType.Idle;
     [SerializeField] private SphereCollider _targetColiiderTrigger = null;  //目标触发
     [SerializeField] private SphereCollider _sensorColiiderTrigger = null;  //警觉触发
 
     [SerializeField] [Range(0, 15)] protected float _stoppingDistance = 1.0f;
 
-    //component
+    // Component Cache
     protected Animator _anim;
     protected NavMeshAgent _agent;
     protected Collider _collider;
-    protected Transform _transform;
+    //protected Transform _transform;
 
-    //public Properties
+    // Public Properties
     public Animator Anim { get { return _anim; } }
     public NavMeshAgent Agent { get { return _agent; } }
     public Vector3 sensorPosition
@@ -107,7 +110,6 @@ public abstract class AIStateMachine : MonoBehaviour
             return point;
         }
     }
-
     public float sensorRaduis
     {
         get
@@ -119,6 +121,9 @@ public abstract class AIStateMachine : MonoBehaviour
             return Mathf.Max(radius, _sensorColiiderTrigger.radius * _sensorColiiderTrigger.transform.lossyScale.z);
         }
     }
+    public bool useRootPosition { get { return _rootPositionRefCount > 0; } }
+    public bool useRootRotation { get { return _rootRotationRefCount > 0; } }
+
 
     protected virtual void Awake()
     {
@@ -166,6 +171,17 @@ public abstract class AIStateMachine : MonoBehaviour
         {
             _currentState = null;
         }
+
+        // Fetch all AIStateMachineLink derived behaviours from the animator
+        // and set their State Machine references to this state machine
+        if (_anim)
+        {
+            AIStateMachineLink[] scripts = _anim.GetBehaviours<AIStateMachineLink>();
+            foreach (AIStateMachineLink script in scripts)
+            {
+                script.stateMachine = this;
+            }
+        }
     }
 
     protected virtual void Update()
@@ -173,6 +189,7 @@ public abstract class AIStateMachine : MonoBehaviour
         if (_currentState == null)
             return;
         AIStateType newAIStateType = _currentState.OnUpdate();
+        //每次,更新了[AIState] 并初始化掉,起始方法
         if (newAIStateType != _currentStateType)
         {
             AIState newState = null;
@@ -189,6 +206,8 @@ public abstract class AIStateMachine : MonoBehaviour
                 newState.OnEnterState();    
                 _currentState = newState;   
             }
+
+            _currentState = newState;
         }
     }
 
@@ -289,5 +308,11 @@ public abstract class AIStateMachine : MonoBehaviour
             _agent.updatePosition = positionUpdate;
             _agent.updateRotation = rotationUpdate;
         }
+    }
+
+    public void AddRootMotionRequest(int rootPosition, int rootRotation)
+    {
+        _rootPositionRefCount += rootPosition;
+        _rootRotationRefCount += rootRotation;
     }
 }
