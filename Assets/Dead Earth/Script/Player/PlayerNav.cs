@@ -43,7 +43,8 @@ public class PlayerNav : MonoBehaviour
         //注意这里是以[局部坐标轴]作为参考。
         //三角函数,去求出anim动画运动【angle】需要的值
         Vector3 localDir = transform.InverseTransformDirection(_agent.desiredVelocity);         //转化为局部坐标,才能去计算角度。
-        //look at here!!!  sin,cos,tan 求的值都是角度.根据1°= 180/Π.得知:arcsin,arccos,arctan [unity这里简写成 Asin、Acos、Atan] 是反切、反弦. 结果是: 1弧度 = Π/180;
+        //look at here!!!  sin,cos,tan 求的值都是比值(也就是弧度).根据1°= 180/Π.得知:arcsin,arccos,arctan [unity这里简写成 Asin、Acos、Atan] 是反切、反弦. 结果是: 1弧度 = Π/180;
+        //sin30° = √3/2  是个比值.
         float angle = Mathf.Atan2(localDir.x , localDir.z) * Mathf.Rad2Deg;                     //得到角度。
         Debug.Log("期望度数：" + angle);
         _smoothAngle = Mathf.MoveTowardsAngle(_smoothAngle, angle, 80.0f * Time.deltaTime);     //水平线插值

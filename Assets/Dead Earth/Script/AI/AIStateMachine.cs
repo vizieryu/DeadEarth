@@ -7,7 +7,7 @@ public enum AIStateType
     None,           //无
     Idle,           //闲置
     Alerted,        //警觉
-    Chase,          //追踪
+    Pursuit,        //追踪
     Attack,         //攻击
     Patrol,         //巡逻
     Dead            //死亡
@@ -38,15 +38,15 @@ public struct AITarget
     private float _distance;
     private float _time;
 
-    public AITargetType Type { get { return _type; } }
+    public AITargetType type { get { return _type; } }
 
-    public Collider Collider { get { return _collider; } }
+    public Collider collider { get { return _collider; } }
 
-    public Vector3 Position { get { return _position; } }
+    public Vector3 position { get { return _position; } }
 
-    public float Distance { set { _distance = value; } get { return _distance; } }
+    public float distance { set { _distance = value; } get { return _distance; } }
 
-    public float Times { get { return _time; } }
+    public float times { get { return _time; } }
 
     public void Set(AITargetType type, Collider collider, Vector3 position, float distance)
     {
@@ -82,18 +82,20 @@ public abstract class AIStateMachine : MonoBehaviour
     protected int _rootPositionRefCount = 0;
     protected int _rootRotationRefCount = 0;
 
-    // Protected Inspector Assigned
-    [SerializeField] private AIStateType _currentStateType = AIStateType.Idle;
-    [SerializeField] private SphereCollider _targetColiiderTrigger = null;  //目标触发
-    [SerializeField] private SphereCollider _sensorColiiderTrigger = null;  //警觉触发
 
+    // Protected Inspector Assigned
+    [SerializeField] protected AIStateType _currentStateType = AIStateType.Idle;
+    [SerializeField] protected SphereCollider _targetColiiderTrigger = null;  //目标触发
+    [SerializeField] protected SphereCollider _sensorColiiderTrigger = null;  //警觉触发
+    [SerializeField] protected AINetWorkPoint _waypointNetwork = null;
+    //[SerializeField] protected bool _randomPatrol = false;
+    //[SerializeField] protected int _currentWayPoint = -1;
     [SerializeField] [Range(0, 15)] protected float _stoppingDistance = 1.0f;
 
     // Component Cache
     protected Animator _anim;
     protected NavMeshAgent _agent;
     protected Collider _collider;
-    //protected Transform _transform;
 
     // Public Properties
     public Animator Anim { get { return _anim; } }
@@ -110,7 +112,7 @@ public abstract class AIStateMachine : MonoBehaviour
             return point;
         }
     }
-    public float sensorRaduis
+    public float sensorRadius
     {
         get
         {
@@ -123,6 +125,13 @@ public abstract class AIStateMachine : MonoBehaviour
     }
     public bool useRootPosition { get { return _rootPositionRefCount > 0; } }
     public bool useRootRotation { get { return _rootRotationRefCount > 0; } }
+    public AITargetType currentTargetType
+    {
+        get
+        {
+            return _target.type;
+        }
+    }
 
 
     protected virtual void Awake()
@@ -135,7 +144,7 @@ public abstract class AIStateMachine : MonoBehaviour
         if (GameScenseManager.Instance != null)
         {
             //每一个物体的InstanceID在场景中是唯一的
-            //注册
+            //注册到 [游戏场景管理]
             if (_targetColiiderTrigger) GameScenseManager.Instance.RegisterAiStateMachine(_targetColiiderTrigger.GetInstanceID(),this);
             if (_sensorColiiderTrigger) GameScenseManager.Instance.RegisterAiStateMachine(_sensorColiiderTrigger.GetInstanceID(),this);
         }
@@ -148,7 +157,7 @@ public abstract class AIStateMachine : MonoBehaviour
             AISensor script = _sensorColiiderTrigger.GetComponent<AISensor>();
             if (script!=null)
             {
-                script.parentStateMachine = this;
+                script.SetAIStateMachine(this);
             }
         }
 
@@ -172,8 +181,8 @@ public abstract class AIStateMachine : MonoBehaviour
             _currentState = null;
         }
 
-        // Fetch all AIStateMachineLink derived behaviours from the animator
-        // and set their State Machine references to this state machine
+        // 获取从动画器派生的所有AIStateMachineLink行为，
+        // 并将它们的状态机引用设置为该状态机.
         if (_anim)
         {
             AIStateMachineLink[] scripts = _anim.GetBehaviours<AIStateMachineLink>();
@@ -216,10 +225,42 @@ public abstract class AIStateMachine : MonoBehaviour
         VisualThreat.Clear();
         AudioThreat.Clear();
 
-        if (_target.Type != AITargetType.None)
+        if (_target.type != AITargetType.None)
         {
-            _target.Distance = Vector3.Distance(transform.position, _target.Position);
+            _target.distance = Vector3.Distance(transform.position, _target.position);
         }
+    }
+
+    int _currentIndex = 0;
+    public Vector3 GetWayPointPosition(bool increment,bool isRandom = false)
+    {
+        Transform target;
+        float distance = 0;
+
+        //随机,巡逻点.
+        if (isRandom)
+        {
+            int randIndex =  Random.Range(0, _waypointNetwork.Points.Length);
+            target = _waypointNetwork.Points[randIndex];
+            distance = Vector3.Distance(transform.position,target.position);
+
+            SetTarget(AITargetType.Waypoint, null, target.position, distance);
+            return target.position;
+        }
+        else
+        {
+            //有递增,index++;
+            if (increment)
+            {
+                _currentIndex++;
+            }
+            _currentIndex %= _waypointNetwork.Points.Length;
+            target = _waypointNetwork.Points[_currentIndex];
+            distance = Vector3.Distance(transform.position, target.position);
+        }
+
+        SetTarget(AITargetType.Waypoint, null, target.position, distance);
+        return target.position;
     }
     
     public void SetTarget(AITargetType t, Collider c, Vector3 p, float d)
@@ -229,7 +270,7 @@ public abstract class AIStateMachine : MonoBehaviour
         if (_targetColiiderTrigger != null)
         {
             _targetColiiderTrigger.radius = _stoppingDistance;
-            _targetColiiderTrigger.transform.position = _target.Position;
+            _targetColiiderTrigger.transform.position = _target.position;
             _targetColiiderTrigger.enabled = true;
         }
     }
@@ -241,7 +282,7 @@ public abstract class AIStateMachine : MonoBehaviour
         if (_targetColiiderTrigger != null)
         {
             _targetColiiderTrigger.radius = _stoppingDistance;
-            _targetColiiderTrigger.transform.position = _target.Position;
+            _targetColiiderTrigger.transform.position = _target.position;
             _targetColiiderTrigger.enabled = true;
         }
     }
@@ -275,9 +316,7 @@ public abstract class AIStateMachine : MonoBehaviour
         }
     }
 
-
-
-    protected virtual void OnTriggerEvent(AITriggerEventType type,Collider other)
+    public virtual void OnTriggerEvent(AITriggerEventType type,Collider other)
     {
         if (_currentState!=null) //当前,有状态。
         {
@@ -301,7 +340,7 @@ public abstract class AIStateMachine : MonoBehaviour
         }
     }
 
-    protected virtual void NavAgentControl(bool positionUpdate,bool rotationUpdate)
+    public virtual void NavAgentControl(bool positionUpdate,bool rotationUpdate)
     {
         if (_agent != null) //当前,有状态。
         {
